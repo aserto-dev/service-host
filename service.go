@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/aserto-dev/aserto-grpc/grpcutil/metrics"
 	"github.com/aserto-dev/certs"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc"
@@ -27,6 +28,7 @@ type Server struct {
 	Registrations GRPCRegistrations
 	Gateway       Gateway
 	Health        *HealthServer
+	Metric        *http.Server
 	Started       chan bool
 }
 
@@ -58,4 +60,5 @@ type API struct {
 	Health struct {
 		ListenAddress string `json:"listen_address"`
 	} `json:"health"`
+	Metrics metrics.Config `json:"metrics"`
 }

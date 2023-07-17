@@ -91,6 +91,14 @@ func (s *ServiceManager) StartServers(ctx context.Context) error {
 				})
 			}
 
+			if serverDetails.Metric != nil {
+				metricServer := serverDetails.Metric
+				s.logger.Info().Msgf("Starting %s Metric server", serverDetails.Config.Metrics.ListenAddress)
+				s.errGroup.Go(func() error {
+					return metricServer.ListenAndServe()
+				})
+			}
+
 			serverDetails.Started <- true // send started information.
 			return nil
 		})
@@ -113,6 +121,7 @@ func (s *ServiceManager) StopServers(ctx context.Context) {
 		s.logger.Info().Msgf("Stopping %s GRPC server", address)
 		value.Server.GracefulStop()
 		if value.Gateway.Server != nil {
+			s.logger.Info().Msgf("Stopping %s Gateway server", value.Gateway.Server.Addr)
 			err := value.Gateway.Server.Shutdown(ctx)
 			if err != nil {
 				s.logger.Err(err).Msgf("failed to shutdown gateway for %s", address)
@@ -120,6 +129,12 @@ func (s *ServiceManager) StopServers(ctx context.Context) {
 		}
 		if value.Health != nil && value.Health.GRPCServer != nil {
 			value.Health.GRPCServer.GracefulStop()
+		}
+		if value.Metric != nil {
+			err := value.Metric.Shutdown(ctx)
+			if err != nil {
+				s.logger.Err(err).Msgf("failed to shutdown metric server for %s", address)
+			}
 		}
 	}
 }
