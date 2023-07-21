@@ -82,11 +82,6 @@ func (f *ServiceFactory) CreateService(config *API, opts []grpc.ServerOption, re
 		reg.MustRegister(grpcm)
 		mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
 
-		// TODO: Fix zpages
-		// debugMux := http.NewServeMux()
-		// zpages.Handle(debugMux, "/debug")
-		// mux.Handle("/debug/", debugMux)
-
 		metric.Handler = mux
 		metric.Addr = config.Metrics.ListenAddress
 	}
