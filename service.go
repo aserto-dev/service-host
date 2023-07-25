@@ -50,6 +50,8 @@ type API struct {
 	Gateway struct {
 		ListenAddress     string               `json:"listen_address"`
 		AllowedOrigins    []string             `json:"allowed_origins"`
+		AllowedHeaders    []string             `json:"allowed_headers"`
+		AllowedMethods    []string             `json:"allowed_methods"`
 		Certs             certs.TLSCredsConfig `json:"certs"`
 		HTTP              bool                 `json:"http"`
 		ReadTimeout       time.Duration        `json:"read_timeout"`
