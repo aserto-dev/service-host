@@ -2,6 +2,7 @@ package builder
 
 import (
 	"context"
+	"embed"
 	"net"
 	"net/http"
 	"time"
@@ -63,4 +64,15 @@ type API struct {
 		ListenAddress string `json:"listen_address"`
 	} `json:"health"`
 	Metrics metrics.Config `json:"metrics"`
+}
+
+func (g *Gateway) AddHandler(pattern string, handler http.HandlerFunc) {
+	g.Mux.Handle(pattern, handler)
+}
+
+func (g *Gateway) AddFileServerHandler(pattern string, file embed.FS) {
+	g.Mux.Handle(pattern, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Content-Type", "application/json")
+		http.FileServer(http.FS(file)).ServeHTTP(w, r)
+	}))
 }
