@@ -97,13 +97,24 @@ func (f *ServiceFactory) CreateService(config *API, opts []grpc.ServerOption, re
 	}, nil
 }
 
+// prepareGateway provides a http server that will have the registrations pointed to the coresponding configured grpc server.
 func prepareGateway(config *API, registrations HandlerRegistrations) (Gateway, error) {
+
+	if len(config.Gateway.AllowedHeaders) == 0 {
+		config.Gateway.AllowedHeaders = DefaultGatewayAllowedHeaders
+	}
+	if len(config.Gateway.AllowedOrigins) == 0 {
+		config.Gateway.AllowedOrigins = DefaultGatewayAllowedOrigins
+	}
+	if len(config.Gateway.AllowedMethods) == 0 {
+		config.Gateway.AllowedMethods = DefaultGatewayAllowedMethods
+	}
+
 	c := cors.New(cors.Options{
-		AllowedHeaders: []string{"Authorization", "Content-Type", "Depth"},
+		AllowedHeaders: config.Gateway.AllowedHeaders,
 		AllowedOrigins: config.Gateway.AllowedOrigins,
-		AllowedMethods: []string{http.MethodGet, http.MethodPost, http.MethodHead, http.MethodDelete, http.MethodPut,
-			http.MethodPatch, "PROPFIND", "MKCOL", "COPY", "MOVE"},
-		Debug: true,
+		AllowedMethods: config.Gateway.AllowedMethods,
+		Debug:          true,
 	})
 
 	runtimeMux := gatewayMux()
@@ -183,6 +194,7 @@ func gatewayMux() *runtime.ServeMux {
 	)
 }
 
+// prepareGrpcServer provides a new grpc server with the provided grpc.ServerOptions using the provided certificates.
 func prepareGrpcServer(certCfg *certs.TLSCredsConfig, opts []grpc.ServerOption) (*grpc.Server, error) {
 	if certCfg != nil && certCfg.TLSCertPath != "" {
 		tlsCreds, err := certs.GRPCServerTLSCreds(*certCfg)
