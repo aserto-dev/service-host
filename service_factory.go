@@ -20,7 +20,8 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
-type ServiceFactory struct{}
+type ServiceFactory struct {
+}
 
 func NewServiceFactory() *ServiceFactory {
 	return &ServiceFactory{}
@@ -60,7 +61,7 @@ func (f *ServiceFactory) CreateService(config *API, opts []grpc.ServerOption, re
 	}
 	gate := Gateway{}
 	if withGateway && config.Gateway.ListenAddress != "" {
-		gate, err = prepareGateway(config, handlerRegistrations)
+		gate, err = f.prepareGateway(config, handlerRegistrations)
 		if err != nil {
 			return nil, err
 		}
@@ -98,7 +99,7 @@ func (f *ServiceFactory) CreateService(config *API, opts []grpc.ServerOption, re
 }
 
 // prepareGateway provides a http server that will have the registrations pointed to the coresponding configured grpc server.
-func prepareGateway(config *API, registrations HandlerRegistrations) (Gateway, error) {
+func (f *ServiceFactory) prepareGateway(config *API, registrations HandlerRegistrations) (Gateway, error) {
 
 	if len(config.Gateway.AllowedHeaders) == 0 {
 		config.Gateway.AllowedHeaders = DefaultGatewayAllowedHeaders
@@ -117,7 +118,7 @@ func prepareGateway(config *API, registrations HandlerRegistrations) (Gateway, e
 		Debug:          true,
 	})
 
-	runtimeMux := gatewayMux()
+	runtimeMux := f.gatewayMux(config.Gateway.AllowedHeaders)
 
 	tlsCreds, err := certs.GatewayAsClientTLSCreds(config.GRPC.Certs)
 	if err != nil {
@@ -151,8 +152,14 @@ func prepareGateway(config *API, registrations HandlerRegistrations) (Gateway, e
 }
 
 // gatewayMux creates a gateway multiplexer for serving the API as an OpenAPI endpoint.
-func gatewayMux() *runtime.ServeMux {
+func (f *ServiceFactory) gatewayMux(AllowedHeaders []string) *runtime.ServeMux {
 	return runtime.NewServeMux(
+		runtime.WithIncomingHeaderMatcher(func(key string) (string, bool) {
+			if contains(AllowedHeaders, key) {
+				return key, true
+			}
+			return runtime.DefaultHeaderMatcher(key)
+		}),
 		runtime.WithMetadata(metrics.CaptureGatewayRoute),
 		runtime.WithMarshalerOption(
 			runtime.MIMEWildcard,
@@ -218,4 +225,13 @@ func fieldsMaskHandler(h http.Handler) http.Handler {
 		}
 		h.ServeHTTP(w, r)
 	})
+}
+
+func contains[T comparable](slice []T, item T) bool {
+	for i := range slice {
+		if slice[i] == item {
+			return true
+		}
+	}
+	return false
 }
