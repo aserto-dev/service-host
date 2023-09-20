@@ -147,7 +147,16 @@ func prepareGateway(config *API, registrations HandlerRegistrations) (Gateway, e
 		IdleTimeout:       config.Gateway.IdleTimeout,
 	}
 
-	return Gateway{Server: gtwServer, Mux: mux, Certs: &config.Gateway.Certs}, nil
+	if config.Gateway.HTTP == false {
+		tlsServerConfig, err := certs.GatewayServerTLSConfig(config.Gateway.Certs)
+		if err != nil {
+			return Gateway{Server: gtwServer, Mux: mux, Certs: &config.Gateway.Certs}, err
+		}
+		gtwServer.TLSConfig = tlsServerConfig
+		return Gateway{Server: gtwServer, Mux: mux, Certs: &config.Gateway.Certs}, nil
+	}
+
+	return Gateway{Server: gtwServer, Mux: mux, Certs: nil}, nil
 }
 
 // gatewayMux creates a gateway multiplexer for serving the API as an OpenAPI endpoint.
