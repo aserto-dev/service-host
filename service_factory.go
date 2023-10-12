@@ -8,12 +8,8 @@ import (
 
 	"github.com/aserto-dev/certs"
 	metrics "github.com/aserto-dev/go-http-metrics/middleware/grpc"
-	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/pkg/errors"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/collectors"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/cors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -30,23 +26,6 @@ func NewServiceFactory() *ServiceFactory {
 func (f *ServiceFactory) CreateService(config *API, opts []grpc.ServerOption, registrations GRPCRegistrations,
 	handlerRegistrations HandlerRegistrations,
 	withGateway bool) (*Server, error) {
-	grpcm := grpc_prometheus.NewServerMetrics(
-		grpc_prometheus.WithServerCounterOptions(),
-	)
-	if config.Metrics.ListenAddress != "" {
-		exemplarFromContext := func(ctx context.Context) prometheus.Labels {
-			method, ok := grpc.Method(ctx)
-			if ok {
-				return prometheus.Labels{"method": method}
-			}
-			return nil
-		}
-
-		unary := grpc.ChainUnaryInterceptor(grpcm.UnaryServerInterceptor(grpc_prometheus.WithExemplarFromContext(exemplarFromContext)))
-		stream := grpc.ChainStreamInterceptor(grpcm.StreamServerInterceptor(grpc_prometheus.WithExemplarFromContext(exemplarFromContext)))
-
-		opts = append(opts, unary, stream)
-	}
 
 	grpcServer, err := prepareGrpcServer(&config.GRPC.Certs, opts)
 	if err != nil {
@@ -67,33 +46,12 @@ func (f *ServiceFactory) CreateService(config *API, opts []grpc.ServerOption, re
 		}
 	}
 
-	var health *HealthServer
-	if config.Health.ListenAddress != "" {
-		health = newGRPCHealthServer()
-	}
-	metric := http.Server{}
-	if config.Metrics.ListenAddress != "" {
-		mux := http.NewServeMux()
-		reg := prometheus.NewRegistry()
-
-		grpcm.InitializeMetrics(grpcServer)
-		reg.MustRegister(collectors.NewGoCollector())
-		reg.MustRegister(collectors.NewBuildInfoCollector())
-		reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{ReportErrors: true}))
-		reg.MustRegister(grpcm)
-		mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
-
-		metric.Handler = mux
-		metric.Addr = config.Metrics.ListenAddress
-	}
 	return &Server{
 		Config:        config,
 		Server:        grpcServer,
 		Listener:      listener,
 		Registrations: registrations,
 		Gateway:       gate,
-		Health:        health,
-		Metric:        &metric,
 		Started:       make(chan bool),
 	}, nil
 }

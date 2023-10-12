@@ -3,10 +3,21 @@ package builder
 import (
 	"context"
 	"net"
+	"net/http"
 	"reflect"
 
+	ocprometheus "contrib.go.opencensus.io/exporter/prometheus"
+	"github.com/aserto-dev/certs"
+	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
+	"go.opencensus.io/plugin/ocgrpc"
+	"go.opencensus.io/stats/view"
+	"go.opencensus.io/zpages"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
 )
 
 type ServiceManager struct {
@@ -16,6 +27,8 @@ type ServiceManager struct {
 
 	Servers       map[string]*Server
 	DependencyMap map[string][]string
+	HealthServer  *Health
+	MetricServer  *http.Server
 }
 
 func NewServiceManager(logger *zerolog.Logger) *ServiceManager {
@@ -36,6 +49,81 @@ func (s *ServiceManager) AddGRPCServer(server *Server) error {
 	return nil
 }
 
+func (s *ServiceManager) SetupHealthServer(address string, certs *certs.TLSCredsConfig) error {
+	healthServer := newGRPCHealthServer(certs)
+	s.HealthServer = healthServer
+	healthListener, err := net.Listen("tcp", address)
+	s.logger.Info().Msgf("Starting %s Health server", address)
+	if err != nil {
+		return err
+	}
+	s.errGroup.Go(func() error {
+		return healthServer.GRPCServer.Serve(healthListener)
+	})
+	return nil
+}
+
+func (s *ServiceManager) SetupMetricsServer(address string, certs *certs.TLSCredsConfig, enableZpages bool) ([]grpc.ServerOption,
+	error) {
+	metric := http.Server{}
+	s.MetricServer = &metric
+	mux := http.NewServeMux()
+	reg := prometheus.NewRegistry()
+
+	grpcm := grpc_prometheus.NewServerMetrics(
+		grpc_prometheus.WithServerCounterOptions(),
+	)
+	reg.MustRegister(collectors.NewGoCollector())
+	reg.MustRegister(collectors.NewBuildInfoCollector())
+	reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{ReportErrors: true}))
+	reg.MustRegister(grpcm)
+	mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{
+		Registry: reg,
+	}))
+	if enableZpages {
+		zpages.Handle(mux, "/debug")
+		ocexporter, err := ocprometheus.NewExporter(ocprometheus.Options{
+			Registry: reg,
+		})
+		if err != nil {
+			return nil, err
+		}
+		view.RegisterExporter(ocexporter)
+		err = view.Register(ocgrpc.DefaultServerViews...)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	metric.Handler = mux
+	metric.Addr = address
+	if certs == nil {
+		s.errGroup.Go(func() error {
+			return metric.ListenAndServe()
+		})
+	} else {
+		s.errGroup.Go(func() error {
+			return metric.ListenAndServeTLS(certs.TLSCertPath, certs.TLSKeyPath)
+		})
+	}
+
+	exemplarFromContext := func(ctx context.Context) prometheus.Labels {
+		method, ok := grpc.Method(ctx)
+
+		if ok {
+			return prometheus.Labels{"method": method}
+		}
+		return nil
+	}
+
+	var opts []grpc.ServerOption
+
+	unary := grpc.ChainUnaryInterceptor(grpcm.UnaryServerInterceptor(grpc_prometheus.WithExemplarFromContext(exemplarFromContext)))
+	stream := grpc.ChainStreamInterceptor(grpcm.StreamServerInterceptor(grpc_prometheus.WithExemplarFromContext(exemplarFromContext)))
+	opts = append(opts, unary, stream, grpc.StatsHandler(&ocgrpc.ServerHandler{}))
+	return opts, nil
+}
+
 func (s *ServiceManager) StartServers(ctx context.Context) error {
 	for serverAddress, value := range s.Servers {
 		address := serverAddress
@@ -44,7 +132,6 @@ func (s *ServiceManager) StartServers(ctx context.Context) error {
 		// log all service details.
 		s.logDetails(address, &serverDetails.Config.GRPC)
 		s.logDetails(address, &serverDetails.Config.Gateway)
-		s.logDetails(address, &serverDetails.Config.Health)
 
 		s.errGroup.Go(func() error {
 			if dependesOnArray, ok := s.DependencyMap[address]; ok {
@@ -79,25 +166,6 @@ func (s *ServiceManager) StartServers(ctx context.Context) error {
 					return nil
 				})
 			}
-			if serverDetails.Health != nil {
-				healthServer := serverDetails.Health
-				healthListener, err := net.Listen("tcp", serverDetails.Config.Health.ListenAddress)
-				s.logger.Info().Msgf("Starting %s Health server", serverDetails.Config.Health.ListenAddress)
-				if err != nil {
-					return err
-				}
-				s.errGroup.Go(func() error {
-					return healthServer.GRPCServer.Serve(healthListener)
-				})
-			}
-
-			if serverDetails.Metric != nil {
-				metricServer := serverDetails.Metric
-				s.logger.Info().Msgf("Starting %s Metric server", serverDetails.Config.Metrics.ListenAddress)
-				s.errGroup.Go(func() error {
-					return metricServer.ListenAndServe()
-				})
-			}
 
 			serverDetails.Started <- true // send started information.
 			return nil
@@ -117,6 +185,17 @@ func (s *ServiceManager) logDetails(address string, element interface{}) {
 }
 
 func (s *ServiceManager) StopServers(ctx context.Context) {
+	if s.HealthServer != nil {
+		s.logger.Info().Msg("Stopping health server")
+		s.HealthServer.GRPCServer.GracefulStop()
+	}
+	if s.MetricServer != nil {
+		s.logger.Info().Msg("Stopping metric server")
+		err := s.MetricServer.Shutdown(ctx)
+		if err != nil {
+			s.logger.Err(err).Msg("failed to shutdown metric server")
+		}
+	}
 	for address, value := range s.Servers {
 		s.logger.Info().Msgf("Stopping %s GRPC server", address)
 		value.Server.GracefulStop()
@@ -125,15 +204,6 @@ func (s *ServiceManager) StopServers(ctx context.Context) {
 			err := value.Gateway.Server.Shutdown(ctx)
 			if err != nil {
 				s.logger.Err(err).Msgf("failed to shutdown gateway for %s", address)
-			}
-		}
-		if value.Health != nil && value.Health.GRPCServer != nil {
-			value.Health.GRPCServer.GracefulStop()
-		}
-		if value.Metric != nil {
-			err := value.Metric.Shutdown(ctx)
-			if err != nil {
-				s.logger.Err(err).Msgf("failed to shutdown metric server for %s", address)
 			}
 		}
 	}
