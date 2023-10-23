@@ -197,6 +197,10 @@ func (s *ServiceManager) StopServers(ctx context.Context) {
 		}
 	}
 	for address, value := range s.Servers {
+		for _, cleanup := range value.Cleanup {
+			s.logger.Info().Msgf("Running cleanups for %s", address)
+			cleanup()
+		}
 		s.logger.Info().Msgf("Stopping %s GRPC server", address)
 		value.Server.GracefulStop()
 		if value.Gateway.Server != nil {

@@ -28,6 +28,7 @@ type Server struct {
 	Registrations GRPCRegistrations
 	Gateway       Gateway
 	Started       chan bool
+	Cleanup       []func()
 }
 
 type Gateway struct {

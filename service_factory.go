@@ -25,7 +25,7 @@ func NewServiceFactory() *ServiceFactory {
 
 func (f *ServiceFactory) CreateService(config *API, opts []grpc.ServerOption, registrations GRPCRegistrations,
 	handlerRegistrations HandlerRegistrations,
-	withGateway bool) (*Server, error) {
+	withGateway bool, cleanup ...func()) (*Server, error) {
 
 	grpcServer, err := prepareGrpcServer(&config.GRPC.Certs, opts)
 	if err != nil {
@@ -53,6 +53,7 @@ func (f *ServiceFactory) CreateService(config *API, opts []grpc.ServerOption, re
 		Registrations: registrations,
 		Gateway:       gate,
 		Started:       make(chan bool),
+		Cleanup:       cleanup,
 	}, nil
 }
 
