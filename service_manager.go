@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"reflect"
+	"time"
 
 	ocprometheus "contrib.go.opencensus.io/exporter/prometheus"
 	"github.com/aserto-dev/certs"
@@ -25,10 +26,11 @@ type ServiceManager struct {
 	logger   *zerolog.Logger
 	errGroup *errgroup.Group
 
-	Servers       map[string]*Server
-	DependencyMap map[string][]string
-	HealthServer  *Health
-	MetricServer  *http.Server
+	Servers         map[string]*Server
+	DependencyMap   map[string][]string
+	HealthServer    *Health
+	MetricServer    *http.Server
+	shutdownTimeout int // timeout to force stop services in seconds
 }
 
 func NewServiceManager(logger *zerolog.Logger) *ServiceManager {
@@ -36,12 +38,18 @@ func NewServiceManager(logger *zerolog.Logger) *ServiceManager {
 	serviceLogger := logger.With().Str("component", "service-manager").Logger()
 	errGroup, ctx := errgroup.WithContext(context.Background())
 	return &ServiceManager{
-		Context:       ctx,
-		logger:        &serviceLogger,
-		Servers:       make(map[string]*Server),
-		DependencyMap: make(map[string][]string),
-		errGroup:      errGroup,
+		Context:         ctx,
+		logger:          &serviceLogger,
+		Servers:         make(map[string]*Server),
+		DependencyMap:   make(map[string][]string),
+		errGroup:        errGroup,
+		shutdownTimeout: 30,
 	}
+}
+
+func (s *ServiceManager) WithShutdownTimeout(seconds int) *ServiceManager {
+	s.shutdownTimeout = seconds
+	return s
 }
 
 func (s *ServiceManager) AddGRPCServer(server *Server) error {
@@ -185,30 +193,61 @@ func (s *ServiceManager) logDetails(address string, element interface{}) {
 }
 
 func (s *ServiceManager) StopServers(ctx context.Context) {
+	timeout := time.Duration(s.shutdownTimeout) * time.Second
+	timeoutContext, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
 	if s.HealthServer != nil {
 		s.logger.Info().Msg("Stopping health server")
-		s.HealthServer.GRPCServer.GracefulStop()
+		if shutDown(s.HealthServer.GRPCServer, timeout) == false {
+			s.logger.Warn().Msg("Stopped health server forcefully")
+		}
 	}
 	if s.MetricServer != nil {
 		s.logger.Info().Msg("Stopping metric server")
-		err := s.MetricServer.Shutdown(ctx)
+		err := s.MetricServer.Shutdown(timeoutContext)
 		if err != nil {
 			s.logger.Err(err).Msg("failed to shutdown metric server")
+			s.logger.Debug().Msg("forcefully closing metric server")
+			if err := s.MetricServer.Close(); err != nil {
+				s.logger.Err(err).Msg("failed to close the metric server")
+			}
 		}
 	}
 	for address, value := range s.Servers {
 		s.logger.Info().Msgf("Stopping %s GRPC server", address)
-		value.Server.GracefulStop()
+		if shutDown(value.Server, timeout) == false {
+			s.logger.Warn().Msgf("Stopped %s GRPC forcefully", address)
+		}
 		if value.Gateway.Server != nil {
 			s.logger.Info().Msgf("Stopping %s Gateway server", value.Gateway.Server.Addr)
-			err := value.Gateway.Server.Shutdown(ctx)
+			err := value.Gateway.Server.Shutdown(timeoutContext)
 			if err != nil {
 				s.logger.Err(err).Msgf("failed to shutdown gateway for %s", address)
+				s.logger.Debug().Msgf("forcefully closing gateway %s", address)
+				if err := value.Gateway.Server.Close(); err != nil {
+					s.logger.Err(err).Msgf("failed to close gateway server %s", address)
+				}
 			}
 		}
 		for _, cleanup := range value.Cleanup {
 			s.logger.Info().Msgf("Running cleanups for %s", address)
 			cleanup()
 		}
+	}
+}
+
+func shutDown(server *grpc.Server, timeout time.Duration) bool {
+	result := make(chan bool, 1)
+	go func() {
+		server.GracefulStop()
+		result <- true
+	}()
+	select {
+	case <-time.After(timeout):
+		server.Stop()
+		return false
+	case response := <-result:
+		return response
 	}
 }
