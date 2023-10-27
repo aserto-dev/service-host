@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/aserto-dev/aserto-grpc/grpcutil/metrics"
 	"github.com/aserto-dev/certs"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc"
@@ -28,9 +27,8 @@ type Server struct {
 	Listener      net.Listener
 	Registrations GRPCRegistrations
 	Gateway       Gateway
-	Health        *HealthServer
-	Metric        *http.Server
 	Started       chan bool
+	Cleanup       []func()
 }
 
 type Gateway struct {
@@ -60,10 +58,6 @@ type API struct {
 		WriteTimeout      time.Duration        `json:"write_timeout"`
 		IdleTimeout       time.Duration        `json:"idle_timeout"`
 	} `json:"gateway"`
-	Health struct {
-		ListenAddress string `json:"listen_address"`
-	} `json:"health"`
-	Metrics metrics.Config `json:"metrics"`
 }
 
 func (g *Gateway) AddHandler(pattern string, handler http.HandlerFunc) {
