@@ -57,7 +57,7 @@ func (f *ServiceFactory) CreateService(config *API, opts []grpc.ServerOption, re
 	}, nil
 }
 
-// prepareGateway provides a http server that will have the registrations pointed to the coresponding configured grpc server.
+// prepareGateway provides a http server that will have the registrations pointed to the corresponding configured grpc server.
 func (f *ServiceFactory) prepareGateway(config *API, registrations HandlerRegistrations) (Gateway, error) {
 
 	if len(config.Gateway.AllowedHeaders) == 0 {
