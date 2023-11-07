@@ -74,7 +74,7 @@ func (f *ServiceFactory) prepareGateway(config *API, registrations HandlerRegist
 		AllowedHeaders: config.Gateway.AllowedHeaders,
 		AllowedOrigins: config.Gateway.AllowedOrigins,
 		AllowedMethods: config.Gateway.AllowedMethods,
-		Debug:          true,
+		Debug:          false,
 	})
 
 	runtimeMux := f.gatewayMux(config.Gateway.AllowedHeaders)
@@ -107,7 +107,7 @@ func (f *ServiceFactory) prepareGateway(config *API, registrations HandlerRegist
 		IdleTimeout:       config.Gateway.IdleTimeout,
 	}
 
-	if config.Gateway.HTTP == false {
+	if !config.Gateway.HTTP {
 		tlsServerConfig, err := certs.GatewayServerTLSConfig(config.Gateway.Certs)
 		if err != nil {
 			return Gateway{Server: gtwServer, Mux: mux, Certs: &config.Gateway.Certs}, err
