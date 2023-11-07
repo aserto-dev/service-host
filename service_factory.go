@@ -74,7 +74,7 @@ func (f *ServiceFactory) prepareGateway(config *API, registrations HandlerRegist
 		AllowedHeaders: config.Gateway.AllowedHeaders,
 		AllowedOrigins: config.Gateway.AllowedOrigins,
 		AllowedMethods: config.Gateway.AllowedMethods,
-		Debug:          true,
+		Debug:          false,
 	})
 
 	runtimeMux := f.gatewayMux(config.Gateway.AllowedHeaders)
