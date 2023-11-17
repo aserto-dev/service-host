@@ -2,7 +2,7 @@ package builder
 
 import "net/http"
 
-var DefaultGatewayAllowedHeaders = []string{"Authorization", "Content-Type", "Depth"}
+var DefaultGatewayAllowedHeaders = []string{"Authorization", "Content-Type", "Depth", "If-Match", "If-None-Match"}
 
 var DefaultGatewayAllowedMethods = []string{http.MethodGet, http.MethodPost, http.MethodHead, http.MethodDelete, http.MethodPut,
 	http.MethodPatch, "PROPFIND", "MKCOL", "COPY", "MOVE"}
