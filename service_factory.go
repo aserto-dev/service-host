@@ -23,42 +23,55 @@ func NewServiceFactory() *ServiceFactory {
 	return &ServiceFactory{}
 }
 
-func (f *ServiceFactory) CreateService(config *API, opts []grpc.ServerOption, registrations GRPCRegistrations,
-	handlerRegistrations HandlerRegistrations,
-	withGateway bool, cleanup ...func()) (*Server, error) {
+type GRPCOptions struct {
+	ServerOptions []grpc.ServerOption
+	Registrations GRPCRegistrations
+}
 
-	grpcServer, err := prepareGrpcServer(&config.GRPC.Certs, opts)
+type GatewayOptions struct {
+	HandlerRegistrations HandlerRegistrations
+	ErrorHandler         runtime.ErrorHandlerFunc
+}
+
+func (f *ServiceFactory) CreateService(
+	config *API,
+	grpcOpts *GRPCOptions,
+	gatewayOpts *GatewayOptions,
+	cleanup ...func(),
+) (*Server, error) {
+
+	grpcServer, err := prepareGrpcServer(&config.GRPC.Certs, grpcOpts.ServerOptions)
 	if err != nil {
 		return nil, err
 	}
-	registrations(grpcServer)
+	grpcOpts.Registrations(grpcServer)
 	reflection.Register(grpcServer)
 
 	listener, err := net.Listen("tcp", config.GRPC.ListenAddress)
 	if err != nil {
 		return nil, err
 	}
-	gate := Gateway{}
-	if withGateway && config.Gateway.ListenAddress != "" {
-		gate, err = f.prepareGateway(config, handlerRegistrations)
+
+	gateway := Gateway{}
+	if gatewayOpts != nil && config.Gateway.ListenAddress != "" {
+		gateway, err = f.prepareGateway(config, gatewayOpts)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	return &Server{
-		Config:        config,
-		Server:        grpcServer,
-		Listener:      listener,
-		Registrations: registrations,
-		Gateway:       gate,
-		Started:       make(chan bool),
-		Cleanup:       cleanup,
+		Config:   config,
+		Server:   grpcServer,
+		Listener: listener,
+		Gateway:  gateway,
+		Started:  make(chan bool),
+		Cleanup:  cleanup,
 	}, nil
 }
 
 // prepareGateway provides a http server that will have the registrations pointed to the corresponding configured grpc server.
-func (f *ServiceFactory) prepareGateway(config *API, registrations HandlerRegistrations) (Gateway, error) {
+func (f *ServiceFactory) prepareGateway(config *API, gatewayOpts *GatewayOptions) (Gateway, error) {
 
 	if len(config.Gateway.AllowedHeaders) == 0 {
 		config.Gateway.AllowedHeaders = DefaultGatewayAllowedHeaders
@@ -77,7 +90,7 @@ func (f *ServiceFactory) prepareGateway(config *API, registrations HandlerRegist
 		Debug:          false,
 	})
 
-	runtimeMux := f.gatewayMux(config.Gateway.AllowedHeaders)
+	runtimeMux := f.gatewayMux(config.Gateway.AllowedHeaders, gatewayOpts.ErrorHandler)
 
 	tlsCreds, err := certs.GatewayAsClientTLSCreds(config.GRPC.Certs)
 	if err != nil {
@@ -89,7 +102,7 @@ func (f *ServiceFactory) prepareGateway(config *API, registrations HandlerRegist
 		grpc.WithTransportCredentials(tlsCreds),
 	}
 
-	err = registrations(context.Background(), runtimeMux, grpcEndpoint, opts)
+	err = gatewayOpts.HandlerRegistrations(context.Background(), runtimeMux, grpcEndpoint, opts)
 	if err != nil {
 		return Gateway{}, err
 	}
@@ -120,8 +133,8 @@ func (f *ServiceFactory) prepareGateway(config *API, registrations HandlerRegist
 }
 
 // gatewayMux creates a gateway multiplexer for serving the API as an OpenAPI endpoint.
-func (f *ServiceFactory) gatewayMux(AllowedHeaders []string) *runtime.ServeMux {
-	return runtime.NewServeMux(
+func (f *ServiceFactory) gatewayMux(AllowedHeaders []string, errorHandler runtime.ErrorHandlerFunc) *runtime.ServeMux {
+	opts := []runtime.ServeMuxOption{
 		runtime.WithIncomingHeaderMatcher(func(key string) (string, bool) {
 			if contains(AllowedHeaders, key) {
 				return key, true
@@ -146,9 +159,6 @@ func (f *ServiceFactory) gatewayMux(AllowedHeaders []string) *runtime.ServeMux {
 				},
 			},
 		),
-
-		// TODO: figure out if we need a custom error handler or not
-		// runtime.WithErrorHandler(CustomErrorHandler),
 		runtime.WithMarshalerOption(
 			"application/json+masked",
 			&runtime.JSONPb{
@@ -166,7 +176,13 @@ func (f *ServiceFactory) gatewayMux(AllowedHeaders []string) *runtime.ServeMux {
 				},
 			},
 		),
-	)
+	}
+
+	if errorHandler != nil {
+		opts = append(opts, runtime.WithErrorHandler(errorHandler))
+	}
+
+	return runtime.NewServeMux(opts...)
 }
 
 // prepareGrpcServer provides a new grpc server with the provided grpc.ServerOptions using the provided certificates.
