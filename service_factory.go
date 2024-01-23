@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strconv"
 
 	"github.com/aserto-dev/certs"
 	metrics "github.com/aserto-dev/go-http-metrics/middleware/grpc"
@@ -14,6 +15,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 type ServiceFactory struct {
@@ -176,6 +178,7 @@ func (f *ServiceFactory) gatewayMux(AllowedHeaders []string, errorHandler runtim
 				},
 			},
 		),
+		runtime.WithForwardResponseOption(httpResponseModifier),
 	}
 
 	if errorHandler != nil {
@@ -183,6 +186,27 @@ func (f *ServiceFactory) gatewayMux(AllowedHeaders []string, errorHandler runtim
 	}
 
 	return runtime.NewServeMux(opts...)
+}
+
+func httpResponseModifier(ctx context.Context, w http.ResponseWriter, p proto.Message) error {
+	md, ok := runtime.ServerMetadataFromContext(ctx)
+	if !ok {
+		return nil
+	}
+
+	// set http status code
+	if vals := md.HeaderMD.Get("x-http-code"); len(vals) > 0 {
+		code, err := strconv.Atoi(vals[0])
+		if err != nil {
+			return err
+		}
+		// delete the headers to not expose any grpc-metadata in http response
+		delete(md.HeaderMD, "x-http-code")
+		delete(w.Header(), "Grpc-Metadata-X-Http-Code")
+		w.WriteHeader(code)
+	}
+
+	return nil
 }
 
 // prepareGrpcServer provides a new grpc server with the provided grpc.ServerOptions using the provided certificates.
