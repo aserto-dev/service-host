@@ -110,13 +110,7 @@ func (f *ServiceFactory) prepareGateway(config *API, gatewayOpts *GatewayOptions
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" {
-			http.Redirect(w, r, config.Gateway.UIRedirect, http.StatusTemporaryRedirect)
-			return
-		}
-		runtimeMux.ServeHTTP(w, r)
-	})
+	mux.Handle("/authorizer/openapi.json", runtimeMux)
 	mux.Handle("/api/", fieldsMaskHandler(runtimeMux))
 
 	gtwServer := &http.Server{
