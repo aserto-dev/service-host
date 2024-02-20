@@ -55,6 +55,7 @@ type API struct {
 		ReadHeaderTimeout time.Duration        `json:"read_header_timeout"`
 		WriteTimeout      time.Duration        `json:"write_timeout"`
 		IdleTimeout       time.Duration        `json:"idle_timeout"`
+		UIRedirect        string               `json:"ui_redirect"`
 	} `json:"gateway"`
 }
 
