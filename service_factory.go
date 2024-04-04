@@ -135,10 +135,10 @@ func (f *ServiceFactory) prepareGateway(config *API, gatewayOpts *GatewayOptions
 }
 
 // gatewayMux creates a gateway multiplexer for serving the API as an OpenAPI endpoint.
-func (f *ServiceFactory) gatewayMux(AllowedHeaders []string, errorHandler runtime.ErrorHandlerFunc) *runtime.ServeMux {
+func (f *ServiceFactory) gatewayMux(allowedHeaders []string, errorHandler runtime.ErrorHandlerFunc) *runtime.ServeMux {
 	opts := []runtime.ServeMuxOption{
 		runtime.WithIncomingHeaderMatcher(func(key string) (string, bool) {
-			if contains(AllowedHeaders, key) {
+			if contains(allowedHeaders, key) {
 				return key, true
 			}
 			return runtime.DefaultHeaderMatcher(key)
@@ -228,7 +228,7 @@ func prepareGrpcServer(certCfg *certs.TLSCredsConfig, opts []grpc.ServerOption) 
 // This happens if a fields.mask query parameter is present and set.
 func fieldsMaskHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if p, ok := r.URL.Query()["fields.mask"]; ok && len(p) > 0 && len(p[0]) > 0 {
+		if p, ok := r.URL.Query()["fields.mask"]; ok && len(p) > 0 && p[0] != "" {
 			r.Header.Set("Content-Type", "application/json+masked")
 		}
 		h.ServeHTTP(w, r)
