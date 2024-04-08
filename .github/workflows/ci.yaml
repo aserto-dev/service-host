@@ -1,0 +1,65 @@
+name: ci
+
+on:
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+  push:
+    # Publish `main` as Docker `latest` image.
+    branches:
+      - main
+      - release-*
+  # Run tests for PRs
+  pull_request:
+    branches:
+      - main
+      - release-*
+env:
+  PRE_RELEASE: ${{ github.ref == 'refs/heads/main' && 'development' || '' }}
+  GO_VERSION: "1.22"
+  GO_RELEASER_VERSION: "v1.24.0"
+  GO_LANGCI_LINT_VERSION: "v1.56.2"
+  GO_TESTSUM_VERSION: "1.11.0"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - 
+        name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - 
+        name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      # -
+      #   name: Build
+      #   uses: goreleaser/goreleaser-action@v5
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   with:
+      #     distribution: goreleaser
+      #     version: ${{ env.GO_RELEASER_VERSION }}
+      #     args: build --clean --snapshot --single-target
+      -
+        name: Lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: ${{ env.GO_LANGCI_LINT_VERSION }}
+      # -
+      #   name: Test Setup
+      #   uses: gertd/action-gotestsum@v3.0.0
+      #   with:
+      #     gotestsum_version: ${{ env.GO_TESTSUM_VERSION }}
+      # -
+      #   name: Test
+      #   run: |
+      #     gotestsum --format short-verbose -- -count=1 -v -timeout=240s -coverprofile=cover.out -coverpkg=./... ./...
+      # - 
+      #   name: Upload code coverage
+      #   uses: shogo82148/actions-goveralls@v1
+      #   continue-on-error: true
+      #   with:
+      #     path-to-profile: cover.out
