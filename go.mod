@@ -3,7 +3,7 @@ module github.com/aserto-dev/service-host
 go 1.19
 
 require (
-	contrib.go.opencensus.io/exporter/prometheus v0.4.0
+	contrib.go.opencensus.io/exporter/prometheus v0.4.2
 	github.com/aserto-dev/certs v0.0.5
 	github.com/aserto-dev/go-http-metrics v0.10.1-20221024-1
 	github.com/go-http-utils/headers v0.0.0-20181008091004-fed159eddc2a
@@ -33,7 +33,7 @@ require (
 	github.com/prometheus/client_model v0.5.0 // indirect
 	github.com/prometheus/common v0.48.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
-	github.com/prometheus/statsd_exporter v0.21.0 // indirect
+	github.com/prometheus/statsd_exporter v0.22.7 // indirect
 	github.com/stretchr/testify v1.8.4 // indirect
 	golang.org/x/net v0.21.0 // indirect
 	golang.org/x/sys v0.17.0 // indirect
