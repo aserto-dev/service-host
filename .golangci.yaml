@@ -34,7 +34,7 @@ linters-settings:
       - whyNoLint
       - wrapperFunc
   gocyclo:
-    min-complexity: 20
+    min-complexity: 18
   goimports:
     local-prefixes: github.com/golangci/golangci-lint
   golint:
@@ -83,7 +83,7 @@ linters:
     - gocritic
     - gocyclo
     - godot
-    # - goerr113 # temporary disabled
+    - goerr113
     - gofmt
     - goimports
     - goprintffuncname
@@ -94,7 +94,7 @@ linters:
     - misspell
     - nakedret
     - noctx
-    # - rowserrcheck # disable https://github.com/golangci/golangci-lint/issues/2649.
+    - rowserrcheck
     - staticcheck
     - stylecheck
     - testpackage
@@ -155,6 +155,5 @@ issues:
       - gosec
 
 run:
-  timeout: 5m
   skip-dirs:
   - pkg/testharness/testdata
