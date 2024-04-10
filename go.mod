@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2
-	github.com/aserto-dev/certs v0.0.5
+	github.com/aserto-dev/certs v0.0.6
 	github.com/aserto-dev/go-http-metrics v0.10.1-20221024-1
 	github.com/go-http-utils/headers v0.0.0-20181008091004-fed159eddc2a
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.0.0
@@ -36,7 +36,7 @@ require (
 	github.com/prometheus/statsd_exporter v0.22.7 // indirect
 	github.com/stretchr/testify v1.8.4 // indirect
 	golang.org/x/net v0.21.0 // indirect
-	golang.org/x/sys v0.17.0 // indirect
+	golang.org/x/sys v0.19.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240227224415-6ceb2ff114de // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240227224415-6ceb2ff114de // indirect
