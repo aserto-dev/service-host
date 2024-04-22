@@ -38,6 +38,7 @@ type Gateway struct {
 type API struct {
 	Needs []string `json:"needs"`
 	GRPC  struct {
+		FQDN          string `json:"fqdn"`
 		ListenAddress string `json:"listen_address"`
 		// Default connection timeout is 120 seconds
 		// https://godoc.org/google.golang.org/grpc#ConnectionTimeout
@@ -45,6 +46,7 @@ type API struct {
 		Certs                    certs.TLSCredsConfig `json:"certs"`
 	} `json:"grpc"`
 	Gateway struct {
+		FQDN              string               `json:"fqdn"`
 		ListenAddress     string               `json:"listen_address"`
 		AllowedOrigins    []string             `json:"allowed_origins"`
 		AllowedHeaders    []string             `json:"allowed_headers"`
