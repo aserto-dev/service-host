@@ -57,8 +57,8 @@ func (s *ServiceManager) AddGRPCServer(server *Server) error {
 	return nil
 }
 
-func (s *ServiceManager) SetupHealthServer(address string, certs *certs.TLSCredsConfig) error {
-	healthServer := newGRPCHealthServer(certs)
+func (s *ServiceManager) SetupHealthServer(address string, certificates *certs.TLSCredsConfig) error {
+	healthServer := newGRPCHealthServer(certificates)
 	s.HealthServer = healthServer
 	healthListener, err := net.Listen("tcp", address)
 	s.logger.Info().Msgf("Starting %s Health server", address)
@@ -71,9 +71,14 @@ func (s *ServiceManager) SetupHealthServer(address string, certs *certs.TLSCreds
 	return nil
 }
 
-func (s *ServiceManager) SetupMetricsServer(address string, certs *certs.TLSCredsConfig, enableZpages bool) ([]grpc.ServerOption,
+func (s *ServiceManager) SetupMetricsServer(address string, certificates *certs.TLSCredsConfig, enableZpages bool) ([]grpc.ServerOption,
 	error) {
-	metric := http.Server{}
+	metric := http.Server{
+		ReadTimeout:       5 * time.Second,
+		ReadHeaderTimeout: 5 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       30 * time.Second,
+	}
 	s.MetricServer = &metric
 	mux := http.NewServeMux()
 	reg := prometheus.NewRegistry()
@@ -105,13 +110,11 @@ func (s *ServiceManager) SetupMetricsServer(address string, certs *certs.TLSCred
 
 	metric.Handler = mux
 	metric.Addr = address
-	if certs == nil {
-		s.errGroup.Go(func() error {
-			return metric.ListenAndServe()
-		})
+	if certificates == nil {
+		s.errGroup.Go(metric.ListenAndServe)
 	} else {
 		s.errGroup.Go(func() error {
-			return metric.ListenAndServeTLS(certs.TLSCertPath, certs.TLSKeyPath)
+			return metric.ListenAndServeTLS(certificates.TLSCertPath, certificates.TLSKeyPath)
 		})
 	}
 
@@ -199,7 +202,7 @@ func (s *ServiceManager) StopServers(ctx context.Context) {
 
 	if s.HealthServer != nil {
 		s.logger.Info().Msg("Stopping health server")
-		if shutDown(s.HealthServer.GRPCServer, timeout) == false {
+		if !shutDown(s.HealthServer.GRPCServer, timeout) {
 			s.logger.Warn().Msg("Stopped health server forcefully")
 		}
 	}
@@ -216,7 +219,7 @@ func (s *ServiceManager) StopServers(ctx context.Context) {
 	}
 	for address, value := range s.Servers {
 		s.logger.Info().Msgf("Stopping %s GRPC server", address)
-		if shutDown(value.Server, timeout) == false {
+		if !shutDown(value.Server, timeout) {
 			s.logger.Warn().Msgf("Stopped %s GRPC forcefully", address)
 		}
 		if value.Gateway.Server != nil {
