@@ -9,9 +9,9 @@ import (
 
 	ocprometheus "contrib.go.opencensus.io/exporter/prometheus"
 	"github.com/aserto-dev/certs"
+	go_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus"
-	grpc_reg "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -55,7 +55,6 @@ func (s *ServiceManager) WithShutdownTimeout(seconds int) *ServiceManager {
 }
 
 func (s *ServiceManager) AddGRPCServer(server *Server) error {
-	grpc_reg.Register(server.Server)
 	s.Servers[server.Config.GRPC.ListenAddress] = server
 	return nil
 }
@@ -76,8 +75,6 @@ func (s *ServiceManager) SetupHealthServer(address string, certificates *certs.T
 
 func (s *ServiceManager) SetupMetricsServer(address string, certificates *certs.TLSCredsConfig, enableZpages bool) ([]grpc.ServerOption,
 	error) {
-
-	grpc_reg.EnableClientHandlingTimeHistogram()
 	metric := http.Server{
 		ReadTimeout:       5 * time.Second,
 		ReadHeaderTimeout: 5 * time.Second,
@@ -92,10 +89,12 @@ func (s *ServiceManager) SetupMetricsServer(address string, certificates *certs.
 		grpc_prometheus.WithServerCounterOptions(),
 		grpc_prometheus.WithServerHandlingTimeHistogram(),
 	)
+
 	reg.MustRegister(collectors.NewGoCollector())
 	reg.MustRegister(collectors.NewBuildInfoCollector())
 	//reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{ReportErrors: true}))
 	reg.MustRegister(grpcm)
+
 	mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{
 		Registry: reg,
 	}))
@@ -137,7 +136,13 @@ func (s *ServiceManager) SetupMetricsServer(address string, certificates *certs.
 
 	unary := grpc.ChainUnaryInterceptor(grpcm.UnaryServerInterceptor(grpc_prometheus.WithExemplarFromContext(exemplarFromContext)))
 	stream := grpc.ChainStreamInterceptor(grpcm.StreamServerInterceptor(grpc_prometheus.WithExemplarFromContext(exemplarFromContext)))
-	opts = append(opts, unary, stream, grpc.StatsHandler(&ocgrpc.ServerHandler{}))
+	opts = append(opts,
+		unary,
+		stream,
+		grpc.StatsHandler(&ocgrpc.ServerHandler{}))
+
+	opts = append(opts, grpc.ChainUnaryInterceptor(go_prometheus.UnaryServerInterceptor), grpc.ChainStreamInterceptor(go_prometheus.StreamServerInterceptor))
+
 	return opts, nil
 }
 
