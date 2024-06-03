@@ -94,7 +94,7 @@ func (s *ServiceManager) SetupMetricsServer(address string, certificates *certs.
 	)
 	reg.MustRegister(collectors.NewGoCollector())
 	reg.MustRegister(collectors.NewBuildInfoCollector())
-	reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{ReportErrors: true}))
+	//reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{ReportErrors: true}))
 	reg.MustRegister(grpcm)
 	mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{
 		Registry: reg,
