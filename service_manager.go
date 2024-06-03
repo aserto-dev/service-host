@@ -9,7 +9,9 @@ import (
 
 	ocprometheus "contrib.go.opencensus.io/exporter/prometheus"
 	"github.com/aserto-dev/certs"
+
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus"
+	grpc_reg "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -53,6 +55,7 @@ func (s *ServiceManager) WithShutdownTimeout(seconds int) *ServiceManager {
 }
 
 func (s *ServiceManager) AddGRPCServer(server *Server) error {
+	grpc_reg.Register(server.Server)
 	s.Servers[server.Config.GRPC.ListenAddress] = server
 	return nil
 }
@@ -73,6 +76,8 @@ func (s *ServiceManager) SetupHealthServer(address string, certificates *certs.T
 
 func (s *ServiceManager) SetupMetricsServer(address string, certificates *certs.TLSCredsConfig, enableZpages bool) ([]grpc.ServerOption,
 	error) {
+
+	grpc_reg.EnableClientHandlingTimeHistogram()
 	metric := http.Server{
 		ReadTimeout:       5 * time.Second,
 		ReadHeaderTimeout: 5 * time.Second,
@@ -85,6 +90,7 @@ func (s *ServiceManager) SetupMetricsServer(address string, certificates *certs.
 
 	grpcm := grpc_prometheus.NewServerMetrics(
 		grpc_prometheus.WithServerCounterOptions(),
+		grpc_prometheus.WithServerHandlingTimeHistogram(),
 	)
 	reg.MustRegister(collectors.NewGoCollector())
 	reg.MustRegister(collectors.NewBuildInfoCollector())
