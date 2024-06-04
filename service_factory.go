@@ -8,20 +8,36 @@ import (
 	"strconv"
 
 	"github.com/aserto-dev/certs"
-	metrics "github.com/aserto-dev/go-http-metrics/middleware/grpc"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/cors"
+	"github.com/slok/go-http-metrics/middleware/std"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	metrics "github.com/slok/go-http-metrics/metrics/prometheus"
+	"github.com/slok/go-http-metrics/middleware"
 )
 
 type ServiceFactory struct {
 }
 
+var mdlw middleware.Middleware
+
 func NewServiceFactory() *ServiceFactory {
+	if reg == nil {
+		reg = prometheus.NewRegistry()
+	}
+	mdlw = middleware.New(middleware.Config{
+		Recorder: metrics.NewRecorder(metrics.Config{
+			Registry: reg,
+		}),
+	})
+
 	return &ServiceFactory{}
 }
 
@@ -113,9 +129,11 @@ func (f *ServiceFactory) prepareGateway(config *API, gatewayOpts *GatewayOptions
 	mux.Handle("/", runtimeMux)
 	mux.Handle("/api/", fieldsMaskHandler(runtimeMux))
 
+	gtwHandler := std.Handler("", mdlw, mux)
+
 	gtwServer := &http.Server{
 		Addr:              config.Gateway.ListenAddress,
-		Handler:           c.Handler(mux),
+		Handler:           c.Handler(gtwHandler),
 		ReadTimeout:       config.Gateway.ReadTimeout,
 		ReadHeaderTimeout: config.Gateway.ReadHeaderTimeout,
 		WriteTimeout:      config.Gateway.WriteTimeout,
@@ -143,7 +161,7 @@ func (f *ServiceFactory) gatewayMux(allowedHeaders []string, errorHandler runtim
 			}
 			return runtime.DefaultHeaderMatcher(key)
 		}),
-		runtime.WithMetadata(metrics.CaptureGatewayRoute),
+		runtime.WithMetadata(captureGatewayRoute),
 		runtime.WithMarshalerOption(
 			runtime.MIMEWildcard,
 			&runtime.JSONPb{
@@ -242,4 +260,30 @@ func contains[T comparable](slice []T, item T) bool {
 		}
 	}
 	return false
+}
+
+type key int
+
+var pathPatternKey key
+
+type gatewayPathPattern struct {
+	PathPattern string
+}
+
+func captureGatewayRoute(ctx context.Context, r *http.Request) metadata.MD {
+	if pattern, ok := runtime.HTTPPathPattern(ctx); ok {
+		if gwPathPattern := gatewayContextValue(r); gwPathPattern != nil {
+			gwPathPattern.PathPattern = pattern
+		}
+	}
+	return nil
+}
+
+func gatewayContextValue(r *http.Request) *gatewayPathPattern {
+	gwPathPattern, ok := r.Context().Value(pathPatternKey).(*gatewayPathPattern)
+	if !ok {
+		return nil
+	}
+
+	return gwPathPattern
 }
