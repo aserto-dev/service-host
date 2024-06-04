@@ -1,18 +1,21 @@
 module github.com/aserto-dev/service-host
 
-go 1.21
+go 1.22
+
+toolchain go1.22.1
 
 require (
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2
 	github.com/aserto-dev/certs v0.0.6
-	github.com/aserto-dev/go-http-metrics v0.10.1-20221024-1
 	github.com/go-http-utils/headers v0.0.0-20181008091004-fed159eddc2a
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.0.1
+	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.20.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.19.1
 	github.com/rs/cors v1.11.0
 	github.com/rs/zerolog v1.33.0
+	github.com/slok/go-http-metrics v0.12.0
 	go.opencensus.io v0.24.0
 	golang.org/x/sync v0.7.0
 	google.golang.org/grpc v1.64.0
@@ -26,7 +29,6 @@ require (
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.1.0 // indirect
-	github.com/kr/text v0.2.0 // indirect
 	github.com/magefile/mage v1.15.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
@@ -34,7 +36,6 @@ require (
 	github.com/prometheus/common v0.53.0 // indirect
 	github.com/prometheus/procfs v0.15.0 // indirect
 	github.com/prometheus/statsd_exporter v0.26.1 // indirect
-	github.com/stretchr/testify v1.9.0 // indirect
 	golang.org/x/net v0.25.0 // indirect
 	golang.org/x/sys v0.20.0 // indirect
 	golang.org/x/text v0.15.0 // indirect
