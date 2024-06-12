@@ -161,10 +161,10 @@ func (s *ServiceManager) StartServers(ctx context.Context) error {
 		s.logDetails(address, &serverDetails.Config.Gateway)
 
 		s.errGroup.Go(func() error {
-			if dependesOnArray, ok := s.DependencyMap[address]; ok {
-				for _, dependesOn := range dependesOnArray {
-					s.logger.Info().Msgf("%s waiting for %s", address, dependesOn)
-					<-s.Servers[dependesOn].Started // wait for started from the dependenent service.
+			if dependsOnArray, ok := s.DependencyMap[address]; ok {
+				for _, dependsOn := range dependsOnArray {
+					s.logger.Info().Msgf("%s waiting for %s", address, dependsOn)
+					<-s.Servers[dependsOn].Started // wait for started from the dependent service.
 				}
 			}
 			grpcServer := serverDetails.Server
