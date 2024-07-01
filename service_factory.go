@@ -23,8 +23,7 @@ import (
 	"github.com/slok/go-http-metrics/middleware"
 )
 
-type ServiceFactory struct {
-}
+type ServiceFactory struct{}
 
 var mdlw middleware.Middleware
 
@@ -57,7 +56,6 @@ func (f *ServiceFactory) CreateService(
 	gatewayOpts *GatewayOptions,
 	cleanup ...func(),
 ) (*Server, error) {
-
 	grpcServer, err := prepareGrpcServer(&config.GRPC.Certs, grpcOpts.ServerOptions)
 	if err != nil {
 		return nil, err
@@ -90,7 +88,6 @@ func (f *ServiceFactory) CreateService(
 
 // prepareGateway provides a http server that will have the registrations pointed to the corresponding configured grpc server.
 func (f *ServiceFactory) prepareGateway(config *API, gatewayOpts *GatewayOptions) (Gateway, error) {
-
 	if len(config.Gateway.AllowedHeaders) == 0 {
 		config.Gateway.AllowedHeaders = DefaultGatewayAllowedHeaders
 	}
@@ -196,6 +193,7 @@ func (f *ServiceFactory) gatewayMux(allowedHeaders []string, errorHandler runtim
 				},
 			},
 		),
+		runtime.WithUnescapingMode(runtime.UnescapingModeAllExceptSlash),
 		runtime.WithForwardResponseOption(httpResponseModifier),
 	}
 
