@@ -35,9 +35,7 @@ type ServiceManager struct {
 	shutdownTimeout int // timeout to force stop services in seconds
 }
 
-var (
-	reg *prometheus.Registry
-)
+var reg *prometheus.Registry
 
 func NewServiceManager(logger *zerolog.Logger) *ServiceManager {
 	if reg == nil {
@@ -67,9 +65,11 @@ func (s *ServiceManager) AddGRPCServer(server *Server) error {
 
 func (s *ServiceManager) SetupHealthServer(address string, certificates *certs.TLSCredsConfig) error {
 	healthServer := newGRPCHealthServer(certificates)
+	healthServer.Address = address
+
 	s.HealthServer = healthServer
 	healthListener, err := net.Listen("tcp", address)
-	s.logger.Info().Msgf("Starting %s Health server", address)
+	s.logger.Info().Msgf("Starting %s health server", address)
 	if err != nil {
 		return err
 	}
@@ -80,8 +80,8 @@ func (s *ServiceManager) SetupHealthServer(address string, certificates *certs.T
 }
 
 func (s *ServiceManager) SetupMetricsServer(address string, certificates *certs.TLSCredsConfig, enableZpages bool) ([]grpc.ServerOption,
-	error) {
-
+	error,
+) {
 	metric := http.Server{
 		ReadTimeout:       5 * time.Second,
 		ReadHeaderTimeout: 5 * time.Second,
@@ -120,6 +120,9 @@ func (s *ServiceManager) SetupMetricsServer(address string, certificates *certs.
 
 	metric.Handler = mux
 	metric.Addr = address
+
+	s.logger.Info().Msgf("Starting %s metric server", address)
+
 	if certificates == nil {
 		s.errGroup.Go(metric.ListenAndServe)
 	} else {
@@ -217,13 +220,13 @@ func (s *ServiceManager) StopServers(ctx context.Context) {
 	defer cancel()
 
 	if s.HealthServer != nil {
-		s.logger.Info().Msg("Stopping health server")
+		s.logger.Info().Msgf("Stopping %s health server", s.HealthServer.Address)
 		if !shutDown(s.HealthServer.GRPCServer, timeout) {
-			s.logger.Warn().Msg("Stopped health server forcefully")
+			s.logger.Warn().Msgf("Stopped %s health server forcefully", s.HealthServer.Address)
 		}
 	}
 	if s.MetricServer != nil {
-		s.logger.Info().Msg("Stopping metric server")
+		s.logger.Info().Msgf("Stopping %s metric server", s.MetricServer.Addr)
 		err := s.MetricServer.Shutdown(timeoutContext)
 		if err != nil {
 			s.logger.Err(err).Msg("failed to shutdown metric server")
