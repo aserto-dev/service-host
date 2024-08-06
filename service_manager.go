@@ -172,7 +172,7 @@ func (s *ServiceManager) StartServers(ctx context.Context) error {
 			}
 			grpcServer := serverDetails.Server
 			listener := serverDetails.Listener
-			s.logger.Info().Msgf("Starting %s GRPC server", address)
+			s.logger.Info().Msgf("Starting %s gRPC server", address)
 			s.errGroup.Go(func() error {
 				return grpcServer.Serve(listener)
 			})
@@ -180,7 +180,7 @@ func (s *ServiceManager) StartServers(ctx context.Context) error {
 			httpServer := serverDetails.Gateway
 			if httpServer.Server != nil {
 				s.errGroup.Go(func() error {
-					s.logger.Info().Msgf("Starting %s Gateway server", httpServer.Server.Addr)
+					s.logger.Info().Msgf("Starting %s gateway server", httpServer.Server.Addr)
 					if httpServer.Certs == nil || httpServer.Certs.TLSCertPath == "" {
 						err := httpServer.Server.ListenAndServe()
 						if err != nil {
@@ -229,20 +229,20 @@ func (s *ServiceManager) StopServers(ctx context.Context) {
 		s.logger.Info().Msgf("Stopping %s metric server", s.MetricServer.Addr)
 		err := s.MetricServer.Shutdown(timeoutContext)
 		if err != nil {
-			s.logger.Err(err).Msg("failed to shutdown metric server")
-			s.logger.Debug().Msg("forcefully closing metric server")
+			s.logger.Err(err).Msgf("failed to shutdown metric server %s", s.MetricServer.Addr)
+			s.logger.Debug().Msgf("forcefully closing metric server %s", s.MetricServer.Addr)
 			if err := s.MetricServer.Close(); err != nil {
-				s.logger.Err(err).Msg("failed to close the metric server")
+				s.logger.Err(err).Msgf("failed to close the metric server %s", s.MetricServer.Addr)
 			}
 		}
 	}
 	for address, value := range s.Servers {
-		s.logger.Info().Msgf("Stopping %s GRPC server", address)
+		s.logger.Info().Msgf("Stopping %s gRPC server", address)
 		if !shutDown(value.Server, timeout) {
-			s.logger.Warn().Msgf("Stopped %s GRPC forcefully", address)
+			s.logger.Warn().Msgf("Stopped %s gRPC forcefully", address)
 		}
 		if value.Gateway.Server != nil {
-			s.logger.Info().Msgf("Stopping %s Gateway server", value.Gateway.Server.Addr)
+			s.logger.Info().Msgf("Stopping %s gateway server", value.Gateway.Server.Addr)
 			err := value.Gateway.Server.Shutdown(timeoutContext)
 			if err != nil {
 				s.logger.Err(err).Msgf("failed to shutdown gateway for %s", address)
