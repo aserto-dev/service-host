@@ -35,9 +35,7 @@ type ServiceManager struct {
 	shutdownTimeout int // timeout to force stop services in seconds
 }
 
-var (
-	reg *prometheus.Registry
-)
+var reg *prometheus.Registry
 
 func NewServiceManager(logger *zerolog.Logger) *ServiceManager {
 	if reg == nil {
@@ -67,9 +65,11 @@ func (s *ServiceManager) AddGRPCServer(server *Server) error {
 
 func (s *ServiceManager) SetupHealthServer(address string, certificates *certs.TLSCredsConfig) error {
 	healthServer := newGRPCHealthServer(certificates)
+	healthServer.Address = address
+
 	s.HealthServer = healthServer
 	healthListener, err := net.Listen("tcp", address)
-	s.logger.Info().Msgf("Starting %s Health server", address)
+	s.logger.Info().Msgf("Starting %s health server", address)
 	if err != nil {
 		return err
 	}
@@ -80,8 +80,8 @@ func (s *ServiceManager) SetupHealthServer(address string, certificates *certs.T
 }
 
 func (s *ServiceManager) SetupMetricsServer(address string, certificates *certs.TLSCredsConfig, enableZpages bool) ([]grpc.ServerOption,
-	error) {
-
+	error,
+) {
 	metric := http.Server{
 		ReadTimeout:       5 * time.Second,
 		ReadHeaderTimeout: 5 * time.Second,
@@ -120,6 +120,9 @@ func (s *ServiceManager) SetupMetricsServer(address string, certificates *certs.
 
 	metric.Handler = mux
 	metric.Addr = address
+
+	s.logger.Info().Msgf("Starting %s metric server", address)
+
 	if certificates == nil {
 		s.errGroup.Go(metric.ListenAndServe)
 	} else {
@@ -169,7 +172,7 @@ func (s *ServiceManager) StartServers(ctx context.Context) error {
 			}
 			grpcServer := serverDetails.Server
 			listener := serverDetails.Listener
-			s.logger.Info().Msgf("Starting %s GRPC server", address)
+			s.logger.Info().Msgf("Starting %s gRPC server", address)
 			s.errGroup.Go(func() error {
 				return grpcServer.Serve(listener)
 			})
@@ -177,7 +180,7 @@ func (s *ServiceManager) StartServers(ctx context.Context) error {
 			httpServer := serverDetails.Gateway
 			if httpServer.Server != nil {
 				s.errGroup.Go(func() error {
-					s.logger.Info().Msgf("Starting %s Gateway server", httpServer.Server.Addr)
+					s.logger.Info().Msgf("Starting %s gateway server", httpServer.Server.Addr)
 					if httpServer.Certs == nil || httpServer.Certs.TLSCertPath == "" {
 						err := httpServer.Server.ListenAndServe()
 						if err != nil {
@@ -217,29 +220,29 @@ func (s *ServiceManager) StopServers(ctx context.Context) {
 	defer cancel()
 
 	if s.HealthServer != nil {
-		s.logger.Info().Msg("Stopping health server")
+		s.logger.Info().Msgf("Stopping %s health server", s.HealthServer.Address)
 		if !shutDown(s.HealthServer.GRPCServer, timeout) {
-			s.logger.Warn().Msg("Stopped health server forcefully")
+			s.logger.Warn().Msgf("Stopped %s health server forcefully", s.HealthServer.Address)
 		}
 	}
 	if s.MetricServer != nil {
-		s.logger.Info().Msg("Stopping metric server")
+		s.logger.Info().Msgf("Stopping %s metric server", s.MetricServer.Addr)
 		err := s.MetricServer.Shutdown(timeoutContext)
 		if err != nil {
-			s.logger.Err(err).Msg("failed to shutdown metric server")
-			s.logger.Debug().Msg("forcefully closing metric server")
+			s.logger.Err(err).Msgf("failed to shutdown metric server %s", s.MetricServer.Addr)
+			s.logger.Debug().Msgf("forcefully closing metric server %s", s.MetricServer.Addr)
 			if err := s.MetricServer.Close(); err != nil {
-				s.logger.Err(err).Msg("failed to close the metric server")
+				s.logger.Err(err).Msgf("failed to close the metric server %s", s.MetricServer.Addr)
 			}
 		}
 	}
 	for address, value := range s.Servers {
-		s.logger.Info().Msgf("Stopping %s GRPC server", address)
+		s.logger.Info().Msgf("Stopping %s gRPC server", address)
 		if !shutDown(value.Server, timeout) {
-			s.logger.Warn().Msgf("Stopped %s GRPC forcefully", address)
+			s.logger.Warn().Msgf("Stopped %s gRPC forcefully", address)
 		}
 		if value.Gateway.Server != nil {
-			s.logger.Info().Msgf("Stopping %s Gateway server", value.Gateway.Server.Addr)
+			s.logger.Info().Msgf("Stopping %s gateway server", value.Gateway.Server.Addr)
 			err := value.Gateway.Server.Shutdown(timeoutContext)
 			if err != nil {
 				s.logger.Err(err).Msgf("failed to shutdown gateway for %s", address)

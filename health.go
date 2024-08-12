@@ -11,6 +11,7 @@ import (
 type Health struct {
 	Server     *health.Server
 	GRPCServer *grpc.Server
+	Address    string
 }
 
 // newGRPCHealthServer creates a new HealthServer.
