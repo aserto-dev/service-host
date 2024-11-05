@@ -7,11 +7,11 @@ import (
 	"reflect"
 	"time"
 
-	ocprometheus "contrib.go.opencensus.io/exporter/prometheus"
 	"github.com/aserto-dev/certs"
-	go_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 
+	ocprometheus "contrib.go.opencensus.io/exporter/prometheus"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus"
+	go_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
