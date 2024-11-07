@@ -17,6 +17,7 @@ import (
 	"github.com/slok/go-http-metrics/middleware"
 	"github.com/slok/go-http-metrics/middleware/std"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -107,18 +108,21 @@ func (f *ServiceFactory) prepareGateway(config *API, gatewayOpts *GatewayOptions
 
 	runtimeMux := f.gatewayMux(config.Gateway.AllowedHeaders, gatewayOpts.ErrorHandler)
 
-	tlsCreds, err := certs.GatewayAsClientTLSCreds(config.GRPC.Certs)
-	if err != nil {
-		return Gateway{}, errors.Wrapf(err, "failed to get TLS credentials")
+	opts := []grpc.DialOption{}
+	if config.GRPC.Certs.TLSCertPath != "" {
+		tlsCreds, err := certs.GatewayAsClientTLSCreds(config.GRPC.Certs)
+		if err != nil {
+			return Gateway{}, errors.Wrapf(err, "failed to get TLS credentials")
+		}
+
+		opts = append(opts, grpc.WithTransportCredentials(tlsCreds))
+	} else {
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
+
 	grpcEndpoint := fmt.Sprintf("dns:///%s", config.GRPC.ListenAddress)
 
-	opts := []grpc.DialOption{
-		grpc.WithTransportCredentials(tlsCreds),
-	}
-
-	err = gatewayOpts.HandlerRegistrations(context.Background(), runtimeMux, grpcEndpoint, opts)
-	if err != nil {
+	if err := gatewayOpts.HandlerRegistrations(context.Background(), runtimeMux, grpcEndpoint, opts); err != nil {
 		return Gateway{}, err
 	}
 

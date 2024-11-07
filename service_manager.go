@@ -123,7 +123,7 @@ func (s *ServiceManager) SetupMetricsServer(address string, certificates *certs.
 
 	s.logger.Info().Msgf("Starting %s metric server", address)
 
-	if certificates == nil {
+	if certificates == nil || certificates.TLSCertPath == "" {
 		s.errGroup.Go(metric.ListenAndServe)
 	} else {
 		s.errGroup.Go(func() error {
